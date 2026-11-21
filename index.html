@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>อัลบั้มรูปภาพ</title>
+<style>
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: #f4f4f9;
+    margin: 0;
+    padding: 15px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: #333;
+  }
+
+  h2 {
+    margin: 5px 0 15px 0;
+    font-size: 20px;
+    text-align: center;
+  }
+
+  /* กล่องครอบอัลบั้มขนาดกะทัดรัด */
+  .album-card {
+    width: 100%;
+    max-width: 560px;
+    background: #fff;
+    border-radius: 14px;
+    padding: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  }
+
+  /* พื้นที่ภาพหลัก */
+  .main-viewer {
+    position: relative;
+    width: 100%;
+    height: 260px;
+    background: #111;
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: pan-y;
+  }
+
+  @media (min-width: 600px) {
+    .main-viewer {
+      height: 340px;
+    }
+  }
+
+  .main-viewer img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    cursor: zoom-in;
+    transition: opacity 0.25s ease;
+    user-select: none;
+  }
+
+  /* ปุ่มเลื่อนซ้าย-ขวา */
+  .nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.45);
+    color: #fff;
+    border: none;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    font-size: 16px;
+    cursor: pointer;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .nav-btn:hover {
+    background: rgba(0, 0, 0, 0.75);
+  }
+
+  .prev-btn { left: 8px; }
+  .next-btn { right: 8px; }
+
+  /* ปุ่มกดซูมมุมขวาล่าง */
+  .zoom-hint-btn {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 16px;
+    font-size: 12px;
+    cursor: pointer;
+    z-index: 5;
+  }
+
+  /* ตัวนับหน้าและคำบรรยาย */
+  .info-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 10px 2px 8px 2px;
+    font-size: 14px;
+    color: #555;
+  }
+
+  .counter {
+    font-size: 12px;
+    background: #eee;
+    padding: 2px 8px;
+    border-radius: 10px;
+    color: #666;
+  }
+
+  /* แถบภาพตัวอย่าง (Thumbnails) */
+  .thumbnails {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 4px 2px;
+    scroll-behavior: smooth;
+  }
+
+  .thumbnails::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  .thumbnails::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 4px;
+  }
+
+  .thumb {
+    flex: 0 0 56px;
+    height: 42px;
+    object-fit: cover;
+    border-radius: 6px;
+    cursor: pointer;
+    opacity: 0.55;
+    border: 2px solid transparent;
+    transition: all 0.2s;
+  }
+
+  @media (min-width: 600px) {
+    .thumb {
+      flex: 0 0 68px;
+      height: 50px;
+    }
+  }
+
+  .thumb.active {
+    opacity: 1;
+    border-color: #2563eb;
+    transform: scale(1.03);
+  }
+
+  /* หน้าต่างขยายเต็มจอ (Lightbox) */
+  .lightbox {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.94);
+    z-index: 1000;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    touch-action: none;
+  }
+
+  .lightbox.open {
+    display: flex;
+  }
+
+  .lightbox-toolbar {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    gap: 8px;
+    z-index: 1010;
+  }
+
+  .lb-btn {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .lb-btn:active {
+    background: rgba(255, 255, 255, 0.35);
+  }
+
+  .lightbox-img-wrap {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .lightbox img {
+    max-width: 95vw;
+    max-height: 85vh;
+    object-fit: contain;
+    transform-origin: center center;
+    transition: transform 0.1s ease-out;
+    user-select: none;
+  }
+
+  .lightbox-tip {
+    position: fixed;
+    bottom: 14px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+    text-align: center;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+  <h2>อัลบั้มรูปภาพ</h2>
+
+  <div class="album-card">
+    <div class="main-viewer" id="mainViewer">
+      <button class="nav-btn prev-btn" onclick="changeSlide(-1)">&#10094;</button>
+      <img id="mainImage" src="1.jpg" alt="รูปภาพ" onclick="openLightbox()">
+      <button class="nav-btn next-btn" onclick="changeSlide(1)">&#10095;</button>
+      <button class="zoom-hint-btn" onclick="openLightbox()">🔍 ซูมดูภาพ</button>
+    </div>
+
+    <div class="info-bar">
+      <span id="captionText">ภาพที่ 1</span>
+      <span class="counter" id="counterText">1 / 9</span>
+    </div>
+
+    <div class="thumbnails" id="thumbContainer"></div>
+  </div>
+
+  <!-- Lightbox สำหรับซูมดูเต็มจอ -->
+  <div class="lightbox" id="lightbox">
+    <div class="lightbox-toolbar">
+      <button class="lb-btn" onclick="adjustZoom(0.5)">+</button>
+      <button class="lb-btn" onclick="adjustZoom(-0.5)">-</button>
+      <button class="lb-btn" onclick="resetZoom()">100%</button>
+      <button class="lb-btn" onclick="closeLightbox()">✕ ปิด</button>
+    </div>
+    <div class="lightbox-img-wrap" id="lbWrap">
+      <img id="lbImage" src="" alt="ภาพขยาย">
+    </div>
+    <div class="lightbox-tip">แตะ 2 ครั้งหรือจีบนิ้วเพื่อซูม • ลากเพื่อเลื่อนดูรายละเอียด</div>
+  </div>
+
+  <script>
+    // รายการรูปภาพ 1.jpg - 9.jpg (สามารถแก้ไขคำบรรยายใน caption ได้ตามต้องการ)
+    const photos = [
+      { src: "1.jpg", caption: "ภาพที่ 1" },
+      { src: "2.jpg", caption: "ภาพที่ 2" },
+      { src: "3.jpg", caption: "ภาพที่ 3" },
+      { src: "4.jpg", caption: "ภาพที่ 4" },
+      { src: "5.jpg", caption: "ภาพที่ 5" },
+      { src: "6.jpg", caption: "ภาพที่ 6" },
+      { src: "7.jpg", caption: "ภาพที่ 7" },
+      { src: "8.jpg", caption: "ภาพที่ 8" },
+      { src: "9.jpg", caption: "ภาพที่ 9" }
+    ];
+
+    let currentIndex = 0;
+    const mainImage = document.getElementById("mainImage");
+    const captionText = document.getElementById("captionText");
+    const counterText = document.getElementById("counterText");
+    const thumbContainer = document.getElementById("thumbContainer");
+
+    // สร้างแถบภาพตัวอย่าง
+    photos.forEach((photo, index) => {
+      const thumb = document.createElement("img");
+      thumb.src = photo.src;
+      thumb.className = "thumb" + (index === 0 ? " active" : "");
+      thumb.onclick = () => goToSlide(index);
+      thumbContainer.appendChild(thumb);
+    });
+
+    function goToSlide(index) {
+      if (index < 0) index = photos.length - 1;
+      if (index >= photos.length) index = 0;
+      currentIndex = index;
+
+      mainImage.src = photos[currentIndex].src;
+      captionText.textContent = photos[currentIndex].caption;
+      counterText.textContent = `${currentIndex + 1} / ${photos.length}`;
+
+      const thumbs = document.querySelectorAll(".thumb");
+      thumbs.forEach((t, i) => {
+        t.classList.toggle("active", i === currentIndex);
+      });
+      thumbs[currentIndex].scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    }
+
+    function changeSlide(step) {
+      goToSlide(currentIndex + step);
+    }
+
+    // รองรับการปัดซ้าย-ขวาบนมือถือในหน้าหลัก
+    let touchStartX = 0;
+    const mainViewer = document.getElementById("mainViewer");
+    mainViewer.addEventListener("touchstart", e => {
+      touchStartX = e.changedTouches[0].screenX;
+    }, { passive: true });
+
+    mainViewer.addEventListener("touchend", e => {
+      const diff = e.changedTouches[0].screenX - touchStartX;
+      if (Math.abs(diff) > 40) {
+        changeSlide(diff < 0 ? 1 : -1);
+      }
+    }, { passive: true });
+
+    // ระบบ Lightbox & Zoom
+    const lightbox = document.getElementById("lightbox");
+    const lbImage = document.getElementById("lbImage");
+    const lbWrap = document.getElementById("lbWrap");
+    let scale = 1, posX = 0, posY = 0;
+    let isDragging = false, startX = 0, startY = 0;
+    let initialPinchDist = 0, initialScale = 1;
+    let lastTap = 0;
+
+    function openLightbox() {
+      lbImage.src = photos[currentIndex].src;
+      resetZoom();
+      lightbox.classList.add("open");
+    }
+
+    function closeLightbox() {
+      lightbox.classList.remove("open");
+    }
+
+    function updateTransform() {
+      lbImage.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+    }
+
+    function adjustZoom(delta) {
+      scale = Math.min(Math.max(1, scale + delta), 4);
+      if (scale === 1) { posX = 0; posY = 0; }
+      updateTransform();
+    }
+
+    function resetZoom() {
+      scale = 1; posX = 0; posY = 0;
+      updateTransform();
+    }
+
+    // ซูมด้วยลูกกลิ้งเมาส์
+    lbWrap.addEventListener("wheel", e => {
+      e.preventDefault();
+      adjustZoom(e.deltaY < 0 ? 0.3 : -0.3);
+    }, { passive: false });
+
+    // ลากดูภาพด้วยเมาส์
+    lbWrap.addEventListener("mousedown", e => {
+      if (scale <= 1) return;
+      isDragging = true;
+      startX = e.clientX - posX;
+      startY = e.clientY - posY;
+    });
+    window.addEventListener("mousemove", e => {
+      if (!isDragging) return;
+      posX = e.clientX - startX;
+      posY = e.clientY - startY;
+      updateTransform();
+    });
+    window.addEventListener("mouseup", () => { isDragging = false; });
+
+    // รองรับการสัมผัสบนมือถือ (จีบนิ้วซูม + ลาก + แตะ 2 ครั้ง)
+    lbWrap.addEventListener("touchstart", e => {
+      if (e.touches.length === 2) {
+        initialPinchDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        initialScale = scale;
+      } else if (e.touches.length === 1) {
+        const now = Date.now();
+        if (now - lastTap < 300) {
+          scale > 1 ? resetZoom() : (scale = 2.5, updateTransform());
+        }
+        lastTap = now;
+
+        if (scale > 1) {
+          isDragging = true;
+          startX = e.touches[0].clientX - posX;
+          startY = e.touches[0].clientY - posY;
+        }
+      }
+    }, { passive: true });
+
+    lbWrap.addEventListener("touchmove", e => {
+      e.preventDefault();
+      if (e.touches.length === 2) {
+        const dist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        scale = Math.min(Math.max(1, initialScale * (dist / initialPinchDist)), 4);
+        if (scale === 1) { posX = 0; posY = 0; }
+        updateTransform();
+      } else if (e.touches.length === 1 && isDragging && scale > 1) {
+        posX = e.touches[0].clientX - startX;
+        posY = e.touches[0].clientY - startY;
+        updateTransform();
+      }
+    }, { passive: false });
+
+    lbWrap.addEventListener("touchend", () => { isDragging = false; });
+  </script>
+
+</body>
+</html>
